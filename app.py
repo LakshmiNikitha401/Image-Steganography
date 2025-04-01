@@ -520,12 +520,18 @@ def extract_data_type():
 
         # Generate output filename with timestamp
         timestamp = int(time.time())
-        output_file_filename = f"extracted_{data_type}_{timestamp}.{
-            'txt' if data_type == 'text' 
-            else 'png' if data_type == 'image' 
-            else 'mp3' if data_type == 'audio' 
-            else 'mp4'
-        }"
+        
+        # Determine file extension based on data type
+        if data_type == 'text':
+            ext = 'txt'
+        elif data_type == 'image':
+            ext = 'png'
+        elif data_type == 'audio':
+            ext = 'mp3'
+        else:  # video
+            ext = 'mp4'
+            
+        output_file_filename = f"extracted_{data_type}_{timestamp}.{ext}"
         output_file_path = os.path.join(EXTRACTED_FOLDER, output_file_filename)
 
         # Extract data
