@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, redirect, url_for, flash, send_from_directory
+from flask import Flask, render_template, request, redirect, url_for, flash, send_from_directory, abort
 from flask_socketio import SocketIO, emit
 import os
 import random
@@ -11,46 +11,50 @@ from PIL import Image
 import io
 import time
 import numpy as np
+import resource
 
 app = Flask(__name__, template_folder=os.path.join(os.getcwd(), 'templates'))
-app.secret_key = 'your_secret_key'
-socketio = SocketIO(app, async_mode='gevent')  # Add this parameter
+app.secret_key = os.environ.get('SECRET_KEY', 'your_secret_key_here')
+socketio = SocketIO(app, async_mode='gevent', cors_allowed_origins="*")
 
+# Configure upload and extracted folders
 UPLOAD_FOLDER = os.path.join(os.getcwd(), 'uploads')
 EXTRACTED_FOLDER = os.path.join(os.getcwd(), 'extracted')
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 os.makedirs(EXTRACTED_FOLDER, exist_ok=True)
 
+# Set memory limit (512MB)
+resource.setrlimit(resource.RLIMIT_AS, (512 * 1024 * 1024, 512 * 1024 * 1024))
+
+# OTP and email configuration
 otp_store = {}
 email_attempts = {}
-COVER_IMAGE_MIN_SIZE = 1 * 1024
+COVER_IMAGE_MIN_SIZE = 1 * 1024  # 1KB minimum size
 
 def generate_otp():
+    """Generate a 4-digit OTP valid for 24 hours"""
     otp = str(random.randint(1000, 9999))
-    expiry_time = time.time() + 24 * 3600
-    otp_store[otp] = expiry_time
+    otp_store[otp] = time.time() + 24 * 3600
     return otp
 
 def is_otp_valid(otp):
-    if otp in otp_store and time.time() < otp_store[otp]:
-        return True
-    return False
+    """Check if OTP is valid and not expired"""
+    return otp in otp_store and time.time() < otp_store[otp]
 
 def send_otp_email(receiver_email, stego_image_path):
+    """Send OTP and stego image via email"""
     try:
-        if receiver_email in email_attempts and email_attempts[receiver_email] >= 3:
+        if email_attempts.get(receiver_email, 0) >= 3:
             flash("Too many attempts. Please try again later.")
             return False
 
         otp = generate_otp()
-        subject = "Image Steganography OTP and Stego Image"
-        body = f'Welcome to Image Steganography. Here is your OTP for extracting data: "{otp}"\n\n'
-        body += "The attached image contains the hidden data. Use the OTP to extract it."
-
         msg = MIMEMultipart()
-        msg['From'] = 'imagesteganography24@gmail.com'
+        msg['From'] = os.environ.get('EMAIL_USER', 'imagesteganography24@gmail.com')
         msg['To'] = receiver_email
-        msg['Subject'] = subject
+        msg['Subject'] = "Image Steganography OTP and Stego Image"
+        
+        body = f'Your OTP for extraction: {otp}\n\nAttached is your stego image.'
         msg.attach(MIMEText(body, 'plain'))
 
         with open(stego_image_path, 'rb') as attachment:
@@ -62,18 +66,17 @@ def send_otp_email(receiver_email, stego_image_path):
 
         with smtplib.SMTP("smtp.gmail.com", 587) as server:
             server.starttls()
-            server.login('imagesteganography24@gmail.com', "fgku cjzw uqev zkrl")
-            server.sendmail('imagesteganography24@gmail.com', receiver_email, msg.as_string())
+            server.login(
+                os.environ.get('EMAIL_USER', 'imagesteganography24@gmail.com'),
+                os.environ.get('EMAIL_PASSWORD', "fgku cjzw uqev zkrl")
+            )
+            server.send_message(msg)
         
-        if receiver_email in email_attempts:
-            email_attempts[receiver_email] = 0
+        email_attempts[receiver_email] = 0
         return True
     except Exception as e:
-        if receiver_email not in email_attempts:
-            email_attempts[receiver_email] = 1
-        else:
-            email_attempts[receiver_email] += 1
-        flash("Failed to send email. Please try again.")
+        email_attempts[receiver_email] = email_attempts.get(receiver_email, 0) + 1
+        flash(f"Failed to send email: {str(e)}")
         return False
 
 def text_to_bits(text):
@@ -140,16 +143,24 @@ def extract_data_from_image(stego_image_path, output_file_path):
         width, height = stego_image.size
         binary_data = ""
         total_pixels = width * height
+        last_progress = 0
+        
         for y in range(height):
             for x in range(width):
                 r, g, b = pixels[x, y]
                 binary_data += str(r & 1)
                 binary_data += str(g & 1)
                 binary_data += str(b & 1)
+                
+                # Update progress every 1% change
+                current_progress = int((y * width + x) / total_pixels * 100)
+                if current_progress > last_progress:
+                    socketio.emit('progress_update', {'progress': current_progress}, namespace='/extract')
+                    last_progress = current_progress
+                    socketio.sleep(0)  # Yield to other tasks
+                
                 if binary_data[-16:] == '1111111111111110':
                     break
-                progress = int((y * width + x) / total_pixels * 100)
-                socketio.emit('progress_update', {'progress': progress})
             else:
                 continue
             break
@@ -162,9 +173,11 @@ def extract_data_from_image(stego_image_path, output_file_path):
 
         with open(output_file_path, 'wb') as file:
             file.write(extracted_bytes)
+        
+        os.chmod(output_file_path, 0o644)  # Ensure file is readable
         return True
     except Exception as e:
-        flash(f"Error extracting data: {e}")
+        socketio.emit('error', {'message': str(e)}, namespace='/extract')
         return False
 
 def hide_image_in_image(cover_image_path, hidden_image_path, output_image_path):
@@ -209,7 +222,7 @@ def extract_image_from_image(stego_image_path, output_image_path):
             binary_hidden_image += str(b & 1)
             pixel_count += 1
             progress = int((pixel_count / total_pixels) * 100)
-            socketio.emit('progress_update', {'progress': progress})
+            socketio.emit('progress_update', {'progress': progress}, namespace='/extract')
         binary_hidden_image = binary_hidden_image[:-16]
         hidden_image_bytes = bytearray()
         for i in range(0, len(binary_hidden_image), 8):
@@ -265,7 +278,7 @@ def extract_audio_from_image(stego_image_path, output_audio_path):
             binary_audio += str(b & 1)
             pixel_count += 1
             progress = int((pixel_count / total_pixels) * 100)
-            socketio.emit('progress_update', {'progress': progress})
+            socketio.emit('progress_update', {'progress': progress}, namespace='/extract')
         binary_audio = binary_audio[:-16]
         audio_bytes = bytearray()
         for i in range(0, len(binary_audio), 8):
@@ -321,7 +334,7 @@ def extract_video_from_image(stego_image_path, output_video_path):
             binary_video += str(b & 1)
             pixel_count += 1
             progress = int((pixel_count / total_pixels) * 100)
-            socketio.emit('progress_update', {'progress': progress})
+            socketio.emit('progress_update', {'progress': progress}, namespace='/extract')
         binary_video = binary_video[:-16]
         video_bytes = bytearray()
         for i in range(0, len(binary_video), 8):
@@ -344,12 +357,12 @@ def get_unique_filename(base_path, filename):
         counter += 1
     return new_filename
 
-def delete_expired_images(image_folder):
+def delete_expired_images(image_folder, max_age_hours=24):
+    now = time.time()
     for filename in os.listdir(image_folder):
-        file_path = os.path.join(image_folder, filename)
-        creation_time = os.path.getctime(file_path)
-        if time.time() - creation_time > 24 * 3600:
-            os.remove(file_path)
+        filepath = os.path.join(image_folder, filename)
+        if os.path.isfile(filepath) and (now - os.path.getctime(filepath)) > max_age_hours * 3600:
+            os.remove(filepath)
 
 @app.route('/')
 def index():
@@ -473,7 +486,15 @@ def success():
 
 @app.route('/download/<filename>')
 def download(filename):
-    return send_from_directory(EXTRACTED_FOLDER, filename, as_attachment=True)
+    try:
+        return send_from_directory(
+            EXTRACTED_FOLDER,
+            filename,
+            as_attachment=True,
+            mimetype='application/octet-stream'
+        )
+    except FileNotFoundError:
+        abort(404)
 
 @app.route('/resend_email', methods=['POST'])
 def resend_email():
