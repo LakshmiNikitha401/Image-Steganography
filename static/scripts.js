@@ -15,7 +15,7 @@ document.addEventListener('DOMContentLoaded', function() {
         coverImageInput.addEventListener('change', calculateCapacity);
     }
 
-    // Initialize Socket.IO for progress updates
+    // Initialize Socket.IO for progress updates with namespace
     initializeSocketIO();
 });
 
@@ -73,7 +73,11 @@ function validateFileSize() {
 }
 
 function initializeSocketIO() {
-    const socket = io();
+    const socket = io('/extract');  // Connect to specific namespace
+    
+    socket.on('connect', function() {
+        console.log('Socket.IO connected');
+    });
     
     socket.on('progress_update', function(data) {
         const progress = data.progress;
@@ -82,11 +86,21 @@ function initializeSocketIO() {
         
         if (progressElement) {
             progressElement.style.width = `${progress}%`;
+            progressElement.setAttribute('aria-valuenow', progress);
         }
         
         if (progressText) {
             progressText.innerText = `${progress}%`;
         }
+    });
+    
+    socket.on('error', function(data) {
+        console.error('Socket.IO error:', data.message);
+        alert('Error during extraction: ' + data.message);
+    });
+    
+    socket.on('disconnect', function() {
+        console.log('Socket.IO disconnected');
     });
 }
 
@@ -94,5 +108,13 @@ function startProgress() {
     const progressContainer = document.getElementById('progress-container');
     if (progressContainer) {
         progressContainer.style.display = 'block';
+    }
+    
+    // Force a small progress update to initialize the bar
+    const progressElement = document.getElementById('progress');
+    const progressText = document.getElementById('progress-text');
+    if (progressElement && progressText) {
+        progressElement.style.width = '1%';
+        progressText.innerText = '1%';
     }
 }
