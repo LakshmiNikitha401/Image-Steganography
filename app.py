@@ -14,7 +14,7 @@ import numpy as np
 
 app = Flask(__name__, template_folder=os.path.join(os.getcwd(), 'templates'))
 app.secret_key = 'your_secret_key'
-socketio = SocketIO(app)
+socketio = SocketIO(app, async_mode='gevent')  # Add this parameter
 
 UPLOAD_FOLDER = os.path.join(os.getcwd(), 'uploads')
 EXTRACTED_FOLDER = os.path.join(os.getcwd(), 'extracted')
