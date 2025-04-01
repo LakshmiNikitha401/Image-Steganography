@@ -392,6 +392,27 @@ print(f"Template folder: {app.template_folder}")
 print(f"Upload folder: {UPLOAD_FOLDER}")
 print(f"Extracted folder: {EXTRACTED_FOLDER}")
 
+
+# [Keep all your existing helper functions exactly as they were]
+# ... (generate_otp, is_otp_valid, send_otp_email, text_to_bits, bits_to_text,
+# get_image_bytes, get_audio_bytes, get_video_bytes, calculate_capacity,
+# hide_data_in_image, extract_data_from_image, hide_image_in_image,
+# extract_image_from_image, hide_audio_in_image, extract_audio_from_image,
+# hide_video_in_image, extract_video_from_image, get_unique_filename,
+# delete_expired_images)
+
+def get_file_type(filename):
+    ext = os.path.splitext(filename)[1].lower()
+    if ext in ('.txt', '.text'):
+        return 'Text File'
+    elif ext in ('.png', '.jpg', '.jpeg', '.gif'):
+        return 'Image File'
+    elif ext in ('.mp3', '.wav', '.ogg'):
+        return 'Audio File'
+    elif ext in ('.mp4', '.avi', '.mov'):
+        return 'Video File'
+    return 'File'
+
 # Routes
 @app.route('/')
 def index():
@@ -497,9 +518,14 @@ def extract_data_type():
         stego_image_path = os.path.join(EXTRACTED_FOLDER, stego_image_filename)
         stego_image.save(stego_image_path)
 
-        # Generate output filename
-        output_file_filename = get_unique_filename(EXTRACTED_FOLDER, 
-            f"extracted_{data_type}.{'txt' if data_type == 'text' else 'png' if data_type == 'image' else 'wav' if data_type == 'audio' else 'mp4'}")
+        # Generate output filename with timestamp
+        timestamp = int(time.time())
+        output_file_filename = f"extracted_{data_type}_{timestamp}.{
+            'txt' if data_type == 'text' 
+            else 'png' if data_type == 'image' 
+            else 'mp3' if data_type == 'audio' 
+            else 'mp4'
+        }"
         output_file_path = os.path.join(EXTRACTED_FOLDER, output_file_filename)
 
         # Extract data
@@ -513,10 +539,18 @@ def extract_data_type():
         if not extract_functions[data_type](stego_image_path, output_file_path):
             return redirect(url_for('extract_data_type'))
 
-        flash("Data extracted successfully!")
-        return redirect(url_for('success', file_path=output_file_path))
+        # Redirect to download page with filename
+        return redirect(url_for('download_file', filename=output_file_filename))
     
     return render_template('extract_data_type.html')
+
+@app.route('/download/<filename>')
+def download_file(filename):
+    try:
+        return send_from_directory(EXTRACTED_FOLDER, filename, as_attachment=True)
+    except FileNotFoundError:
+        flash("File not found. Please try extracting again.")
+        return redirect(url_for('extract_data_type'))
 
 @app.route('/thank_you')
 def thank_you():
@@ -524,12 +558,16 @@ def thank_you():
 
 @app.route('/success')
 def success():
-    file_path = request.args.get('file_path', '')
-    return render_template('success.html', file_path=file_path)
-
-@app.route('/download/<filename>')
-def download(filename):
-    return send_from_directory(EXTRACTED_FOLDER, filename, as_attachment=True)
+    filename = request.args.get('filename', '')
+    if not filename:
+        flash("No file specified for download.")
+        return redirect(url_for('extract_data_type'))
+    
+    file_type = get_file_type(filename)
+    return render_template('success.html', 
+                         filename=filename, 
+                         file_type=file_type,
+                         download_url=url_for('download_file', filename=filename))
 
 if __name__ == '__main__':
     socketio.run(app, debug=True)
