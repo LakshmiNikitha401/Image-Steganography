@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Thank You</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+    <script>
+        // Only redirect if not downloading
+        setTimeout(function() {
+            if (!window.downloadTriggered) {
+                window.location.href = "{{ url_for('index') }}";
+            }
+        }, 10000);  // Increased timeout to 10 seconds
+        
+        // Track download clicks
+        document.addEventListener('DOMContentLoaded', function() {
+            const downloadBtn = document.querySelector('.download-btn');
+            if (downloadBtn) {
+                downloadBtn.addEventListener('click', function() {
+                    window.downloadTriggered = true;
+                    // Add small delay to ensure download starts before redirect
+                    setTimeout(function() {
+                        window.location.href = "{{ url_for('index') }}";
+                    }, 3000);
+                });
+            }
+        });
+    </script>
+</head>
+<body>
+    <div class="container">
+        {% if action == 'hide' %}
+            <h1>Thank You!</h1>
+            <div class="success-message">
+                <p>Data hidden successfully!</p>
+                <p>An email with the stego image has been sent to the recipient.</p>
+            </div>
+            <p>You will be redirected to the main menu shortly...</p>
+        {% elif action == 'extract' %}
+            <h1>Success!</h1>
+            <div class="success-message">
+                <p>Data extracted successfully!</p>
+                {% if file_path %}
+                    <p>Download your file:</p>
+                    <a href="{{ url_for('download', filename=file_name) }}" 
+                       class="btn download-btn"
+                       download="{{ file_name }}">
+                       Download {{ file_name }}
+                    </a>
+                {% endif %}
+            </div>
+            <p>You will be redirected to the main menu shortly...</p>
+        {% else %}
+            <h1>Thank You!</h1>
+            <p>You will be redirected to the main menu shortly...</p>
+        {% endif %}
+    </div>
+</body>
+</html>
