@@ -52,5 +52,4 @@ The system performs **Real-Time Capacity Validation** before any data is hidden 
 * **3rd Prize Winner:** HITAM Project Expo 2025.
 * **Research Paper:** Published in the **International Journal of Research and Analytical Reviews (IJRAR)**.
 
----
 
