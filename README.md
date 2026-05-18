@@ -59,4 +59,4 @@ The system performs **Real-Time Capacity Validation** before any data is hidden 
 
 | Hiding Interface | Extraction & OTP Verification |
 | :--- | :--- |
-| ![Hiding UI]("C:\Users\laksh\OneDrive\Pictures\Screenshots 1\Screenshot 2026-05-16 184905.png") | ![Extraction UI]("C:\Users\laksh\OneDrive\Pictures\Screenshots 1\Screenshot 2026-05-16 184954.png") |
+| ![Hiding UI](Screenshot 2026-05-16 184905.png") | ![Extraction UI]("C:\Users\laksh\OneDrive\Pictures\Screenshots 1\Screenshot 2026-05-16 184954.png") |
