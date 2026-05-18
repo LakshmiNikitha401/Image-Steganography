@@ -54,9 +54,3 @@ The system performs **Real-Time Capacity Validation** before any data is hidden 
 
 ---
 
-## 🖥️ Interface Preview
-*(Upload your own screenshots here to match the friend's "Dashboard Preview" style)*
-
-| Hiding Interface | Extraction & OTP Verification |
-| :--- | :--- |
-| ![Hiding UI](Screenshot 2026-05-16 184905.png") | ![Extraction UI]("C:\Users\laksh\OneDrive\Pictures\Screenshots 1\Screenshot 2026-05-16 184954.png") |
