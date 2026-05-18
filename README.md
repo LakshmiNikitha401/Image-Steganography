@@ -1,4 +1,4 @@
-# 🔐 Image Steganography with OTP Security
+# 🔐 Image Steganography using LSB
 **A high-security, multi-format data concealment system using LSB embedding and automated SMTP verification.**
 
 ---
